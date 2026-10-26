@@ -28,7 +28,9 @@ Ask Claude to hand a task to Codex ("have Codex implement this", "ask Codex to a
 - finding a Codex binary that accepts your model (the app-bundled CLI is often newer than the one on PATH),
 - read-only vs. write invocations of `codex exec`,
 - a brief template (scope, design, repo rules, done-when, report-back),
-- a review checklist so Claude checks the real diff instead of trusting Codex's report.
+- a review checklist so Claude checks the real diff instead of trusting Codex's report,
+- `report.schema.json`: a JSON schema for Codex's final report (`--output-schema`), including a field for MCP servers it would need,
+- defaults and knobs (model, reasoning effort, sandbox limits, MCP policy).
 
 ## Notes
 

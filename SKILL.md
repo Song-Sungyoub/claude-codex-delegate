@@ -59,7 +59,7 @@ Verified behavior of `resume`:
 - Sandbox and working directory are **not** inherited, and `-s` / `-C` do not exist on `resume`. The resumed session runs in the directory you invoke it from (checked: it ignored the first run's directory). Without the `-c` override the sandbox falls back to the config default, which may be writable even if the first run was read-only. Always pass `sandbox_mode` explicitly; `read-only` really blocks writes.
 - Use the session ID, never `--last`: it picks the newest session for the current directory, which is wrong as soon as two tasks run.
 
-**Start a new session** (new brief that includes what was learned) when the task is new or unrelated, the direction changes, more than 2-3 follow-ups have piled up, or Codex repeats a mistake you already rejected. Long sessions carry stale context and early wrong assumptions. Use `--ephemeral` for throwaway read-only probes so nothing is recorded.
+**Start a new session** (new brief that includes what was learned) when the task is new or unrelated, the direction changes, more than 2-3 follow-ups have piled up, or Codex repeats a mistake you already rejected. Long sessions carry stale context and early wrong assumptions. `--ephemeral` is meant for throwaway read-only probes (it should skip recording the session; not verified).
 
 **Follow-up briefs are files too.** Append `## Follow-up N` to the task's brief: what to change, which approved files remain in scope. A follow-up cannot widen the approved scope; that needs the user's approval first. Review the diff after every round, not only the last.
 
@@ -90,6 +90,7 @@ Write it to a file; Codex knows only what the brief and the repo tell it.
 
 # Repo rules
 Follow the repository's AGENTS.md / CONTRIBUTING / style docs: <name the exact files to read first>.
+Repository docs and the existing architecture take precedence over any global guidance in ~/.codex/AGENTS.md.
 Do not run VCS state-changing commands (commit, push, update, revert, clean, lock) unless this brief says so.
 
 # Done when
@@ -97,7 +98,7 @@ Do not run VCS state-changing commands (commit, push, update, revert, clean, loc
 - <exact build / test / lint commands to run, and the result expected>
 
 # Report back
-Files changed, what changed in each, commands run with their real output (pass/fail), anything you could not verify.
+Your final reply must be JSON matching `report.schema.json` (Claude passes it with `--output-schema`): status, files changed with a summary each, commands run with exit code and real result, what you could not verify, open questions, and any MCP server you would need.
 ```
 
 ## 5. Verification belongs in the brief
@@ -124,3 +125,24 @@ If the result is wrong, send a narrower follow-up brief rather than fixing it si
 - The first read-only probe is the cheapest way to prove auth, model and sandbox before spending a real run.
 - Codex may read AGENTS.md from the working directory upward; keep `-C` inside the repo so repo rules apply.
 - Do not paste secrets into briefs; briefs may be logged.
+- Be explicit with paths. A prompt saying "the Skills folder" was read twice as Codex's own `~/.codex/skills` instead of the repository's `./Skills`; write paths relative to `-C`.
+
+## 8. Defaults and knobs
+
+**Defaults.** Model `gpt-6.1-sol` (leave `-m` off unless overriding). Reasoning effort `low` for docs, searches and mechanical edits, `medium` for implementation and debugging; go higher only when the user asks. Set it per call with `-c model_reasoning_effort=medium` (checked: the log header shows the value) and leave the user's `config.toml` alone.
+
+**What the model offers** (Codex 0.164 local catalog, `codex debug models`; re-read it after app updates):
+- Context window 500k tokens (older models 272k); text and image input, so UI mockups can go along with `-i <image>`.
+- Effort levels low, medium, high, xhigh, max, ultra. Default is whatever `config.toml` says.
+- Tool mode "code mode only": commands run through a helper executable, which is why a stale CLI folder fails every task (section 1).
+- Freeform `apply_patch`, optional live web search (`--search`), optional fast service tier, and its own sub-agents (multi-agent v2).
+
+**Structured report.** Pass `--output-schema <skill-dir>/report.schema.json` and the final message is JSON with `status`, `files_changed`, `commands_run`, `not_verified`, `open_questions`, `mcp_requests` (checked: valid JSON came back at low and medium). Parse it, then compare with your own diff; it is a claim, not proof. `--json` streams events (`thread.started`, `item.started`, `item.completed`, `turn.completed`) if you need to see tool failures directly.
+
+**Global guidance.** `~/.codex/AGENTS.md` is loaded into every Codex run and may hold the user's own design preferences that Claude does not see. Read it once, and in each brief say which wins (see the brief template).
+
+**Sandbox limits.** Network is restricted and writes stop at the working directory (plus temp). Codex cannot install packages, reach the web (except `--search`) or edit its own configuration.
+
+**MCP servers.** Codex should not add MCP servers itself: its config lives outside the workspace and a server runs external code. It lists what it needs in `mcp_requests` (name, reason, command). Claude checks the source, then runs `codex mcp add ...` outside the sandbox once the user agrees; servers the user pre-approved may be added without asking again. Never grant `--add-dir` on `~/.codex` (it holds the login).
+
+**Not verified yet:** `-i` image input, `queue`, `fork`, `--add-dir`, and whether `--ephemeral` really skips recording a session.
