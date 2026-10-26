@@ -105,6 +105,8 @@ Your final reply must be JSON matching `report.schema.json` (Claude passes it wi
 
 Tell Codex to run whatever the project already uses (build, unit tests, linters, the engine's headless CLI, a running dev environment), and to say plainly what it could not run. Look for the tooling in the repo's docs or agent-skill folders before writing the brief, and name the commands in "Done when".
 
+Codex may start the editor or dev server a verification needs and stop what it started. One that was already running when the task began belongs to the user and may hold unsaved work: Codex must ask (through Claude) before closing or restarting it.
+
 Example (Unity): `unity status` to detect a live Editor, `recompile` + `recompile_status` for compile errors, `run_tests`, and driving scenes through the CLI instead of hand-editing `.unity`/`.prefab` YAML. If compile errors put the Editor in Safe Mode, the CLI cannot connect; fix the C# and restart the Editor.
 
 ## 6. Review (Claude's job, do not skip)
