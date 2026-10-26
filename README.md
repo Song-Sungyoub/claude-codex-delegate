@@ -13,6 +13,12 @@ cp -r codex-delegate ~/.claude/skills/
 cp -r codex-delegate <repo>/.claude/skills/
 ```
 
+The skill folder must be named `codex-delegate` (the repository itself is `claude-codex-delegate`):
+
+```bash
+git clone https://github.com/Song-Sungyoub/claude-codex-delegate ~/.claude/skills/codex-delegate
+```
+
 Requires the `codex` CLI, signed in (`codex login status`).
 
 ## Use
