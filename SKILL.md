@@ -45,7 +45,7 @@ codex exec -s workspace-write -C <repo> -o <reply.txt> - < brief.md
 
 ## 3. Sessions: one Codex session per task
 
-A task is the unit, not a call. Every `codex exec` starts a fresh session that remembers nothing; the `session id:` line in its log identifies it.
+A task (one approved piece of work) is the unit, not a call, and follow-ups on the same feature stay in the same session while they build on what Codex just wrote: that saves re-reading files and keeps its reasoning. Every `codex exec` starts a fresh session that remembers nothing; the `session id:` line in its log identifies it.
 
 **Follow-ups within the same task** continue that session:
 
@@ -59,15 +59,15 @@ Verified behavior of `resume`:
 - Sandbox and working directory are **not** inherited, and `-s` / `-C` do not exist on `resume`. The resumed session runs in the directory you invoke it from (checked: it ignored the first run's directory). Without the `-c` override the sandbox falls back to the config default, which may be writable even if the first run was read-only. Always pass `sandbox_mode` explicitly; `read-only` really blocks writes.
 - Use the session ID, never `--last`: it picks the newest session for the current directory, which is wrong as soon as two tasks run.
 
-**Start a new session** (new brief that includes what was learned) when the task is new or unrelated, the direction changes, more than 2-3 follow-ups have piled up, or Codex repeats a mistake you already rejected. Long sessions carry stale context and early wrong assumptions. `--ephemeral` is meant for throwaway read-only probes (it should skip recording the session; not verified).
+**Start a new session** (new brief that includes what was learned) when the task is new or unrelated, the direction changes, more than 3-4 follow-ups have piled up or the session's cumulative tokens pass about 150k (a starting value to calibrate; every run's log ends with a `tokens used` line, so sum them in the ledger), or Codex repeats a mistake you already rejected. Long sessions carry stale context and early wrong assumptions. `--ephemeral` is meant for throwaway read-only probes (it should skip recording the session; not verified).
 
 **Follow-up briefs are files too.** Append `## Follow-up N` to the task's brief: what to change, which approved files remain in scope. A follow-up cannot widen the approved scope; that needs the user's approval first. Review the diff after every round, not only the last.
 
 **Task ledger.** Keep one table outside the repository (a stray file would pollute the working copy):
 
-| Task | Session ID | Brief file | Approved files | State |
-|---|---|---|---|---|
-| short name | uuid | path | list or glob | briefed / running / in review / approved / dropped |
+| Task | Session ID | Brief file | Approved files | Tokens used (sum) | State |
+|---|---|---|---|---|---|
+| short name | uuid | path | list or glob | number | briefed / running / in review / approved / dropped |
 
 Update it on every call; a lost session ID means a lost session. Close the session (state `approved` or `dropped`) when the user accepts or abandons the task.
 
@@ -98,7 +98,7 @@ Do not run VCS state-changing commands (commit, push, update, revert, clean, loc
 - <exact build / test / lint commands to run, and the result expected>
 
 # Report back
-Your final reply must be JSON matching `report.schema.json` (Claude passes it with `--output-schema`): status, files changed with a summary each, commands run with exit code and real result, what you could not verify, open questions, and any MCP server you would need.
+Your final reply must be JSON matching `report.schema.json` (Claude passes it with `--output-schema`): status, files changed with a summary each, commands run with exit code and real result, what you could not verify, open questions, and any extension (MCP server, plugin or skill) you would need.
 ```
 
 ## 5. Verification belongs in the brief
@@ -137,12 +137,12 @@ If the result is wrong, send a narrower follow-up brief rather than fixing it si
 - Tool mode "code mode only": commands run through a helper executable, which is why a stale CLI folder fails every task (section 1).
 - Freeform `apply_patch`, optional live web search (`--search`), optional fast service tier, and its own sub-agents (multi-agent v2).
 
-**Structured report.** Pass `--output-schema <skill-dir>/report.schema.json` and the final message is JSON with `status`, `files_changed`, `commands_run`, `not_verified`, `open_questions`, `mcp_requests` (checked: valid JSON came back at low and medium). Parse it, then compare with your own diff; it is a claim, not proof. `--json` streams events (`thread.started`, `item.started`, `item.completed`, `turn.completed`) if you need to see tool failures directly.
+**Structured report.** Pass `--output-schema <skill-dir>/report.schema.json` and the final message is JSON with `status`, `files_changed`, `commands_run`, `not_verified`, `open_questions`, `extension_requests` (checked: valid JSON came back at low and medium). Parse it, then compare with your own diff; it is a claim, not proof. `--json` streams events (`thread.started`, `item.started`, `item.completed`, `turn.completed`) if you need to see tool failures directly.
 
 **Global guidance.** `~/.codex/AGENTS.md` is loaded into every Codex run and may hold the user's own design preferences that Claude does not see. Read it once, and in each brief say which wins (see the brief template).
 
 **Sandbox limits.** Network is restricted and writes stop at the working directory (plus temp). Codex cannot install packages, reach the web (except `--search`) or edit its own configuration.
 
-**MCP servers.** Codex should not add MCP servers itself: its config lives outside the workspace and a server runs external code. It lists what it needs in `mcp_requests` (name, reason, command). Claude checks the source, then runs `codex mcp add ...` outside the sandbox once the user agrees; servers the user pre-approved may be added without asking again. Never grant `--add-dir` on `~/.codex` (it holds the login).
+**Extensions (MCP servers, plugins, skills).** An MCP server is one tool server (`codex mcp add`), a plugin is an installable bundle from a marketplace that can carry skills, MCP servers and apps (`codex plugin add PLUGIN@MARKETPLACE`), a skill is a folder of instructions under `~/.codex/skills`. Codex should not install any of them itself: its configuration lives outside the workspace and they run external code. It lists what it needs in `extension_requests` (kind, name, reason, install_command). Claude first checks what is already installed (`codex mcp list`, `codex plugin list`) and the source, then installs outside the sandbox once the user agrees; sources the user pre-approved may be installed without asking again. Never grant `--add-dir` on `~/.codex` (it holds the login).
 
 **Not verified yet:** `-i` image input, `queue`, `fork`, `--add-dir`, and whether `--ephemeral` really skips recording a session.

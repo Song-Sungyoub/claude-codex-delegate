@@ -31,20 +31,21 @@
     },
     "not_verified": { "type": "array", "items": { "type": "string" } },
     "open_questions": { "type": "array", "items": { "type": "string" } },
-    "mcp_requests": {
+    "extension_requests": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
+          "kind": { "type": "string", "enum": ["mcp", "plugin", "skill"] },
           "name": { "type": "string" },
           "reason": { "type": "string" },
-          "command": { "type": "string" }
+          "install_command": { "type": "string" }
         },
-        "required": ["name", "reason", "command"],
+        "required": ["kind", "name", "reason", "install_command"],
         "additionalProperties": false
       }
     }
   },
-  "required": ["status", "files_changed", "commands_run", "not_verified", "open_questions", "mcp_requests"],
+  "required": ["status", "files_changed", "commands_run", "not_verified", "open_questions", "extension_requests"],
   "additionalProperties": false
 }
