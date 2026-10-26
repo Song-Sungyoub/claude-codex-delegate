@@ -82,8 +82,8 @@ Write it to a file; Codex knows only what the brief and the repo tell it.
 <one paragraph: what and why>
 
 # Scope (approved by the user)
-- Files you may change: <list>
-- Files you must NOT touch: everything else. If another file is needed, stop and report instead of editing.
+- Files you may change: <exact list, docs included; no open-ended clauses such as "update any other mentions">
+- Files you must NOT touch: everything else, including docs that merely mention the changed code (report stale mentions instead of editing them). If another file is needed, stop and report instead of editing.
 
 # Design
 <the decisions already made; interfaces, data shapes, behavior>
@@ -92,6 +92,7 @@ Write it to a file; Codex knows only what the brief and the repo tell it.
 Follow the repository's AGENTS.md / CONTRIBUTING / style docs: <name the exact files to read first>.
 Repository docs and the existing architecture take precedence over any global guidance in ~/.codex/AGENTS.md.
 Do not run VCS state-changing commands (commit, push, update, revert, clean, lock) unless this brief says so.
+Text files: preserve each file's existing encoding and line endings (check for a BOM and LF/CRLF first). Write UTF-8 without BOM and keep LF unless the file already differs. In Windows PowerShell 5.1, `Set-Content` and `Out-File -Encoding UTF8` add a BOM and can rewrite line endings; use `[IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))` or the patch tool, and report the first three bytes of every edited text file.
 
 # Done when
 - <observable criteria>
@@ -107,6 +108,8 @@ Tell Codex to run whatever the project already uses (build, unit tests, linters,
 
 Codex may start the editor or dev server a verification needs and stop what it started. One that was already running when the task began belongs to the user and may hold unsaved work: Codex must ask (through Claude) before closing or restarting it.
 
+Make checks easy to run and read. Give a checks class a `Run()` that catches exceptions and returns a result string (and a `Main()` that throws on failure): `Console.WriteLine` output is not captured by editor commands. Ad-hoc editor scripts go to `$env:TEMP` (outside the repo) and run with `run_script --file`; Windows PowerShell 5.1 splits double quotes inside native-command arguments, so avoid them in `eval` expressions.
+
 Example (Unity): `unity status` to detect a live Editor, `recompile` + `recompile_status` for compile errors, `run_tests`, and driving scenes through the CLI instead of hand-editing `.unity`/`.prefab` YAML. If compile errors put the Editor in Safe Mode, the CLI cannot connect; fix the C# and restart the Editor.
 
 ## 6. Review (Claude's job, do not skip)
@@ -118,6 +121,13 @@ Codex's report is a claim, not proof.
 3. Re-run the key verification yourself when cheap (build, the specific failing test), or say it was not re-run.
 4. Report to the user: files changed, what changed, verification results (Codex's vs. your own), and what only the user can check.
 
+Methods that worked in practice:
+- **Boundary proof**: fingerprint (path, size, modification time) everything outside the allowed area before the run and compare after; confirm any hit by hash. It is cheap and catches editor side effects.
+- **Encoding proof**: compare BOM and CRLF/LF counts of every edited text file against the backups. Codex once rewrote whole docs to CRLF and added a BOM, which makes a line diff show the entire file as changed.
+- **Unity YAML (prefab/scene)**: compare by object block (anchor id), not by line. Unity reorders override entries, so a line diff can look huge while the real change is one added component.
+- **Own checks**: write an independent check with hand-computed expectations (boundary values, ring-buffer wrap, interpolation endpoints) instead of only re-running Codex's checks.
+- **Scope honesty**: what the user approved is the file list in the brief. If Codex touched a file outside it, even helpfully, say so in the report and get approval before keeping the change.
+
 If the result is wrong, send a narrower follow-up brief rather than fixing it silently; for a small fix, say that Claude made it.
 
 ## 7. Known pitfalls
@@ -127,6 +137,8 @@ If the result is wrong, send a narrower follow-up brief rather than fixing it si
 - The first read-only probe is the cheapest way to prove auth, model and sandbox before spending a real run.
 - Codex may read AGENTS.md from the working directory upward; keep `-C` inside the repo so repo rules apply.
 - Do not paste secrets into briefs; briefs may be logged.
+- Open-ended brief clauses ("update any other mentions") widen the scope silently. List the exact files and ask Codex to report the rest.
+- Windows PowerShell 5.1 traps: double quotes inside native-command arguments are split (also in `git commit -m`; use `-F file` written without a BOM); `$name:` must be written `${name}:`; variable names are case-insensitive, so `$R` and `$r` are the same variable.
 - Be explicit with paths. A prompt saying "the Skills folder" was read twice as Codex's own `~/.codex/skills` instead of the repository's `./Skills`; write paths relative to `-C`.
 
 ## 8. Defaults and knobs
