@@ -36,7 +36,37 @@ codex exec -s workspace-write -C <repo> -o <reply.txt> - < brief.md
 - `codex exec` is non-interactive: Codex cannot ask for approval mid-run. All approval happens in chat **before** the call.
 - Run long jobs in the background and wait for the completion notice; do not poll.
 
-## 3. Brief template
+## 3. Sessions: one Codex session per task
+
+A task is the unit, not a call. Every `codex exec` starts a fresh session that remembers nothing; the `session id:` line in its log identifies it.
+
+**Follow-ups within the same task** continue that session:
+
+```bash
+cd <repo>   # resume has no -C; the current directory is used
+codex exec resume <SESSION_ID> -c 'sandbox_mode="workspace-write"' -o <reply.txt> - < followup.md
+```
+
+Verified behavior of `resume`:
+- Memory is kept (the resumed session recalled earlier context).
+- Sandbox and working directory are **not** inherited, and `-s` / `-C` do not exist on `resume`. The resumed session runs in the directory you invoke it from (checked: it ignored the first run's directory). Without the `-c` override the sandbox falls back to the config default, which may be writable even if the first run was read-only. Always pass `sandbox_mode` explicitly; `read-only` really blocks writes.
+- Use the session ID, never `--last`: it picks the newest session for the current directory, which is wrong as soon as two tasks run.
+
+**Start a new session** (new brief that includes what was learned) when the task is new or unrelated, the direction changes, more than 2-3 follow-ups have piled up, or Codex repeats a mistake you already rejected. Long sessions carry stale context and early wrong assumptions. Use `--ephemeral` for throwaway read-only probes so nothing is recorded.
+
+**Follow-up briefs are files too.** Append `## Follow-up N` to the task's brief: what to change, which approved files remain in scope. A follow-up cannot widen the approved scope; that needs the user's approval first. Review the diff after every round, not only the last.
+
+**Task ledger.** Keep one table outside the repository (a stray file would pollute the working copy):
+
+| Task | Session ID | Brief file | Approved files | State |
+|---|---|---|---|---|
+| short name | uuid | path | list or glob | briefed / running / in review / approved / dropped |
+
+Update it on every call; a lost session ID means a lost session. Close the session (state `approved` or `dropped`) when the user accepts or abandons the task.
+
+**Parallel tasks** are fine only if their approved file sets are disjoint and every shared resource (one working copy, one editor or dev server, one database) is used by one job at a time. Run code-writing in parallel and shared-resource verification one after another. When unsure, run serially.
+
+## 4. Brief template
 
 Write it to a file; Codex knows only what the brief and the repo tell it.
 
@@ -63,13 +93,13 @@ Do not run VCS state-changing commands (commit, push, update, revert, clean, loc
 Files changed, what changed in each, commands run with their real output (pass/fail), anything you could not verify.
 ```
 
-## 4. Verification belongs in the brief
+## 5. Verification belongs in the brief
 
 Tell Codex to run whatever the project already uses (build, unit tests, linters, the engine's headless CLI, a running dev environment), and to say plainly what it could not run. Look for the tooling in the repo's docs or agent-skill folders before writing the brief, and name the commands in "Done when".
 
 Example (Unity): `unity status` to detect a live Editor, `recompile` + `recompile_status` for compile errors, `run_tests`, and driving scenes through the CLI instead of hand-editing `.unity`/`.prefab` YAML. If compile errors put the Editor in Safe Mode, the CLI cannot connect; fix the C# and restart the Editor.
 
-## 5. Review (Claude's job, do not skip)
+## 6. Review (Claude's job, do not skip)
 
 Codex's report is a claim, not proof.
 
@@ -80,7 +110,7 @@ Codex's report is a claim, not proof.
 
 If the result is wrong, send a narrower follow-up brief rather than fixing it silently; for a small fix, say that Claude made it.
 
-## 6. Known pitfalls
+## 7. Known pitfalls
 
 - A model name that works in the Codex app may be rejected by an older CLI; see section 1.
 - The first read-only probe is the cheapest way to prove auth, model and sandbox before spending a real run.
