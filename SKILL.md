@@ -129,7 +129,7 @@ If the result is wrong, send a narrower follow-up brief rather than fixing it si
 
 ## 8. Defaults and knobs
 
-**Defaults.** Model `gpt-6.1-sol` (leave `-m` off unless overriding). Reasoning effort `low` for docs, searches and mechanical edits, `medium` for implementation and debugging; go higher only when the user asks. Set it per call with `-c model_reasoning_effort=medium` (checked: the log header shows the value) and leave the user's `config.toml` alone.
+**Defaults.** Model `gpt-6.1-sol` (leave `-m` off unless overriding). Reasoning effort `low` for docs, searches and mechanical edits, `medium` for implementation and debugging; go higher only when the user asks. Set it per call with `-c model_reasoning_effort=medium` (checked: the log header shows the value) and leave the user's `config.toml` alone. Do not use the fast service tier (2x speed, more usage) unless the user asks.
 
 **What the model offers** (Codex 0.164 local catalog, `codex debug models`; re-read it after app updates):
 - Context window 500k tokens (older models 272k); text and image input, so UI mockups can go along with `-i <image>`.
