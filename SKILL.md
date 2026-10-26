@@ -11,10 +11,14 @@ Split of roles: **Claude** designs, writes the brief and reviews. **Codex** impl
 
 ```bash
 codex --version && codex login status
-codex exec -s read-only --skip-git-repo-check -o <tmpfile> "Reply OK only. Do not modify files."
+codex exec -s read-only --skip-git-repo-check -o <tmpfile> "Run a shell command that prints the current directory name, then reply with it. Do not modify files."
 ```
 
 If the probe fails with `model_not_found` / "model is not supported", the `codex` on PATH is probably older than the one the Codex desktop app bundles. Look for a newer binary (the app's own path is usually in `CODEX_CLI_PATH` inside `~/.codex/config.toml`, or in a versioned subfolder next to the app's `codex` binary), compare `--version`, and use the newest. Do not edit the user's `config.toml` to work around it; pass the binary path and `-m` per call instead.
+
+The probe must make Codex run a shell command; a text-only probe ("Reply OK") is not enough. An install whose command-execution helper is missing still answers text, then fails every real task with `failed to spawn code-mode host ... codex-code-mode-host.exe` and still exits with code 0.
+
+After a Codex app update the CLI appears in a new versioned folder next to the old ones, and `CODEX_CLI_PATH` in `config.toml` may keep pointing to a stale one. Pick the newest build by `--version` and build date, and on Windows check that its folder contains the helper executables (`codex-code-mode-host.exe`, `codex-command-runner.exe`). Re-run the probe after every app update.
 
 Treat the stderr noise from unrelated MCP servers (auth errors, `base_instructions` cache warnings) as harmless unless the final reply is missing.
 
@@ -35,6 +39,9 @@ codex exec -s workspace-write -C <repo> -o <reply.txt> - < brief.md
 - Never use `--dangerously-bypass-approvals-and-sandbox` / full-access sandboxes unless the user explicitly asks.
 - `codex exec` is non-interactive: Codex cannot ask for approval mid-run. All approval happens in chat **before** the call.
 - Run long jobs in the background and wait for the completion notice; do not poll.
+- `--skip-git-repo-check` is required when the working directory is not a trusted git repository (no commits, an SVN working copy, a plain folder). Without it Codex stops before doing anything (`Not inside a trusted directory`).
+- A brief can be given by path in the prompt ("Read <path> and carry it out"); Codex read a file outside `-C` fine (checked). Stdin (`-`) works too. When piping non-ASCII text from Windows PowerShell 5.1, set `$OutputEncoding = [Text.UTF8Encoding]::new($false)` first (the default is ASCII); a Korean brief arrived intact this way.
+- Exit code 0 does not mean the work was done: a run whose tools failed exits 0 with an apologetic final message. Judge by the reply and by the files that actually changed.
 
 ## 3. Sessions: one Codex session per task
 
@@ -103,7 +110,7 @@ Example (Unity): `unity status` to detect a live Editor, `recompile` + `recompil
 
 Codex's report is a claim, not proof.
 
-1. Read the actual diff. Confirm only approved files changed and nothing else (stray files, generated output, formatting churn).
+1. Read the actual diff. Confirm only approved files changed and nothing else (stray files, generated output, formatting churn). No usable VCS (for example an SVN working copy without the `svn` CLI)? Hash the relevant files and keep copies of the files you expect to change before the run, then compare after; `git diff --no-index old new` gives a readable diff. Also check line endings and BOM of edited text files against the originals.
 2. Check it against the design in the brief and the repo's rules (comment style, docs that must be kept in sync, naming).
 3. Re-run the key verification yourself when cheap (build, the specific failing test), or say it was not re-run.
 4. Report to the user: files changed, what changed, verification results (Codex's vs. your own), and what only the user can check.
@@ -113,6 +120,7 @@ If the result is wrong, send a narrower follow-up brief rather than fixing it si
 ## 7. Known pitfalls
 
 - A model name that works in the Codex app may be rejected by an older CLI; see section 1.
+- A failed run is often an environment problem (stale binary, missing helper, trust check), not a task problem. Fix the environment and start a fresh session with the same brief; do not `resume` a session that never did any work. Record such attempts in the ledger as dropped with the reason.
 - The first read-only probe is the cheapest way to prove auth, model and sandbox before spending a real run.
 - Codex may read AGENTS.md from the working directory upward; keep `-C` inside the repo so repo rules apply.
 - Do not paste secrets into briefs; briefs may be logged.
